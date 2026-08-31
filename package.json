@@ -1,19 +1,24 @@
 {
   "name": "frozen-eval",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Evals you cannot quietly bend: corpus and bars frozen in one hash, fail-closed runs, a hash-chained results ledger, leakage checks that exit non-zero.",
   "type": "module",
-  "main": "./src/index.ts",
+  "main": "./dist/index.js",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
   },
   "files": [
-    "src",
-    "bin"
+    "dist",
+    "src"
   ],
   "scripts": {
-    "test": "node --experimental-strip-types --test \"test/*.test.ts\"",
-    "typecheck": "tsc --noEmit"
+    "test": "node --test \"test/*.test.ts\"",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.build.json",
+    "prepare": "npm run build"
   },
   "repository": {
     "type": "git",
@@ -31,10 +36,14 @@
     "typescript"
   ],
   "engines": {
-    "node": ">=22.6"
+    "node": ">=22.18"
   },
   "devDependencies": {
     "@types/node": "^26.4.0",
     "typescript": "^5.7.0"
+  },
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "frozen-eval": "./dist/cli.js"
   }
 }

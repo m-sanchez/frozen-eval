@@ -18,6 +18,10 @@ export interface Bar {
   metric: string;
   op: '>=' | '<=';
   value: number;
+  /** 'point' (default) compares the point estimate; 'wilson-low' compares
+   * the Wilson 95% lower bound, so a lucky small-n rate cannot clear a bar
+   * its interval does not support. Rate metrics only. */
+  bound?: 'point' | 'wilson-low';
   note?: string;
 }
 

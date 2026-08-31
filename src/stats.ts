@@ -3,6 +3,7 @@
  * fails closed: an eval that cannot compute its own number has not
  * cleared anything. */
 
+import { FrozenEvalError } from './manifest.ts';
 import type { Bar } from './manifest.ts';
 
 export interface WilsonInterval {
@@ -41,11 +42,19 @@ export function aggregate(perItem: ItemScores[]): Aggregate {
   for (const name of names) {
     const values = perItem.map((s) => s[name]).filter((v) => v !== undefined);
     const booleans = values.filter((v): v is boolean => typeof v === 'boolean');
-    if (booleans.length === values.length && values.length > 0) {
+    const numbers = values.filter((v): v is number => typeof v === 'number');
+    if (booleans.length > 0 && numbers.length > 0) {
+      // A judge that returns true for nine items and 1 for the tenth would
+      // silently aggregate to a mean over one value and clear its bar at
+      // n=1. Refusing here is the whole point of the package.
+      throw new FrozenEvalError(
+        `metric "${name}" mixes boolean and number values; a mixed metric cannot aggregate honestly`
+      );
+    }
+    if (booleans.length > 0) {
       const k = booleans.filter(Boolean).length;
       out[name] = { kind: 'rate', value: k / booleans.length, n: booleans.length, wilson: wilson(k, booleans.length) };
     } else {
-      const numbers = values.filter((v): v is number => typeof v === 'number');
       out[name] = {
         kind: 'mean',
         value: numbers.length > 0 ? numbers.reduce((a, b) => a + b, 0) / numbers.length : NaN,
@@ -59,8 +68,11 @@ export function aggregate(perItem: ItemScores[]): Aggregate {
 export interface BarResult {
   metric: string;
   value: number;
+  /** the denominator behind the value; a number without one is not evidence */
+  n: number;
   bar: string;
   pass: boolean;
+  detail?: string;
 }
 
 export interface Verdict {
@@ -71,10 +83,25 @@ export interface Verdict {
 export function evaluateBars(agg: Aggregate, bars: Bar[]): Verdict {
   const results: BarResult[] = bars.map((bar) => {
     const metric = agg[bar.metric];
-    const value = metric?.value ?? NaN;
+    const bound = bar.bound ?? 'point';
+    const barText = `${bar.op} ${bar.value}${bound === 'wilson-low' ? ' (wilson lower bound)' : ''}`;
+    if (metric == null) {
+      return { metric: bar.metric, value: NaN, n: 0, bar: barText, pass: false, detail: 'metric never produced' };
+    }
+    if (bound === 'wilson-low' && metric.kind !== 'rate') {
+      return {
+        metric: bar.metric,
+        value: metric.value,
+        n: metric.n,
+        bar: barText,
+        pass: false,
+        detail: 'wilson-low bound requires a boolean (rate) metric'
+      };
+    }
+    const value = bound === 'wilson-low' ? metric.wilson!.low : metric.value;
     const pass =
       Number.isFinite(value) && (bar.op === '>=' ? value >= bar.value : value <= bar.value);
-    return { metric: bar.metric, value, bar: `${bar.op} ${bar.value}`, pass };
+    return { metric: bar.metric, value, n: metric.n, bar: barText, pass };
   });
   return { pass: results.every((r) => r.pass), results };
 }

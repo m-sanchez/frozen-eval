@@ -133,3 +133,54 @@ test('leakage: duplicate ids, identical inputs, and near-duplicates across split
 test('a clean corpus reports clean', () => {
   assert.ok(checkLeakage(CORPUS).clean);
 });
+
+test('a mixed boolean/number metric refuses to aggregate', async () => {
+  const mixed = [{ exact: true }, { exact: 1 as unknown as boolean }];
+  const { aggregate } = await import('../src/stats.ts');
+  assert.throws(() => aggregate(mixed), /mixes boolean and number/);
+});
+
+test('bar results carry their denominator', async () => {
+  const run = await runEval({ manifest, corpus: CORPUS, split: 'dev', judge: perfectJudge, label: 'n-check' });
+  for (const r of run.verdict.results) assert.equal(r.n, 3);
+});
+
+test('a wilson-low bar refuses what a lucky point estimate would clear', async () => {
+  const { aggregate, evaluateBars } = await import('../src/stats.ts');
+  const agg = aggregate(Array.from({ length: 7 }, (_, i) => ({ exact: i !== 0 }))); // 6/7 = 0.857
+  const point = evaluateBars(agg, [{ metric: 'exact', op: '>=', value: 0.85 }]);
+  assert.ok(point.pass, 'the point estimate clears the bar');
+  const bound = evaluateBars(agg, [{ metric: 'exact', op: '>=', value: 0.85, bound: 'wilson-low' }]);
+  assert.ok(!bound.pass, 'the interval does not support the same claim at n=7');
+  assert.ok(bound.results[0].value < 0.6);
+});
+
+test('wilson-low over a numeric metric fails closed with the reason named', async () => {
+  const { aggregate, evaluateBars } = await import('../src/stats.ts');
+  const agg = aggregate([{ latencyMs: 10 }]);
+  const verdict = evaluateBars(agg, [{ metric: 'latencyMs', op: '<=', value: 100, bound: 'wilson-low' }]);
+  assert.ok(!verdict.pass);
+  assert.match(verdict.results[0].detail!, /requires a boolean/);
+});
+
+test('an oversized corpus fails leakage closed instead of skipping the near-dup check', () => {
+  const big = {
+    dev: Array.from({ length: 30 }, (_, i) => item(`b${i}`, `input number ${i} with words`))
+  };
+  const closed = checkLeakage(big, { maxExhaustiveItems: 10 });
+  assert.ok(!closed.clean);
+  assert.equal(closed.nearDuplicateCheck.status, 'not-run');
+  assert.ok(closed.violations.some((v) => v.includes('unknown is not clean')));
+
+  const overridden = checkLeakage(big, { maxExhaustiveItems: 10, allowUncheckedNearDuplicates: true });
+  assert.ok(overridden.clean, 'the override proceeds');
+  assert.equal(overridden.nearDuplicateCheck.overridden, true, 'and is recorded in the report');
+});
+
+test('CLI: usage errors exit 2 and never masquerade as drift', async () => {
+  const { main } = await import('../src/cli.ts');
+  assert.equal(main([]), 2);
+  assert.equal(main(['freeze']), 2);
+  assert.equal(main(['verify', 'no-such-file.json', 'also-missing.json']), 2);
+  assert.equal(main(['--help']), 0);
+});

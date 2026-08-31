@@ -1,9 +1,9 @@
 # frozen-eval
 
 ![TypeScript](https://img.shields.io/badge/TypeScript-erasable_syntax-3178C6?logo=typescript&logoColor=white)
-![Node](https://img.shields.io/badge/node-%3E%3D22.6-5FA04E?logo=nodedotjs&logoColor=white)
+![Node](https://img.shields.io/badge/node-%3E%3D22.18-5FA04E?logo=nodedotjs&logoColor=white)
 ![Dependencies](https://img.shields.io/badge/dependencies-0-B45309)
-![Tests](https://img.shields.io/badge/tests-12_passing-2F6F44)
+[![CI](https://github.com/m-sanchez/frozen-eval/actions/workflows/test.yml/badge.svg)](https://github.com/m-sanchez/frozen-eval/actions/workflows/test.yml)
 ![License](https://img.shields.io/badge/license-MIT-6E6E6E)
 
 Evals you cannot quietly bend.
@@ -29,8 +29,13 @@ exists to close:
   entry commits to the previous one. Editing a past run, deleting an
   inconvenient one, or reordering history breaks the chain at that entry,
   and `verifyLedger` names the line.
-- **Leakage exits non-zero.** Duplicate ids, identical inputs frozen into
-  two splits, near-duplicates across splits (character-trigram Dice).
+- **Leakage exits non-zero, and unknown never becomes pass.** Duplicate
+  ids, identical inputs frozen into two splits, near-duplicates across
+  splits (character-trigram Dice). The pair-wise near-dup check is
+  refused above a documented ceiling (default 5000 items, it is O(n^2)):
+  the report says `not-run`, the check fails closed, and the only way
+  past is an explicit `--allow-unchecked-near-duplicates`, which the
+  report records.
 
 ```ts
 import { freeze, runEval, appendRun } from 'frozen-eval';
@@ -52,28 +57,58 @@ ledger = appendRun(ledger, run);   // the only honest operation the format suppo
 ```
 
 Boolean metrics aggregate to a rate with a Wilson 95% interval (n = 0 is
-[0, 1], never a confident point); numeric metrics to a mean. The judge is
-yours; every field it returns becomes a metric a bar can bind.
+[0, 1], never a confident point); numeric metrics to a mean; a metric that
+mixes the two refuses to aggregate at all. Every bar result carries its
+denominator, and a bar may bind the Wilson lower bound instead of the
+point estimate (`bound: 'wilson-low'`), so a lucky small-n rate cannot
+clear a bar its interval does not support. The judge is yours; every
+field it returns becomes a metric a bar can bind.
 
 ## CLI
 
+Installed with the package (`npx frozen-eval` after install):
+
 ```bash
-node --experimental-strip-types bin/frozen-eval.ts freeze corpus.json bars.json > manifest.json
-node --experimental-strip-types bin/frozen-eval.ts verify corpus.json manifest.json   # exit 1 on drift
-node --experimental-strip-types bin/frozen-eval.ts check corpus.json                  # exit 1 on leakage
-node --experimental-strip-types bin/frozen-eval.ts verify-ledger runs.jsonl           # exit 1 on a broken chain
+frozen-eval freeze corpus.json bars.json > manifest.json
+frozen-eval verify corpus.json manifest.json   # exit 1 on drift
+frozen-eval check corpus.json                  # exit 1 on leakage or an unrun check
+frozen-eval verify-ledger runs.jsonl           # exit 1 on a broken chain
 ```
 
-## Run
+Exit codes: `0` clean, `1` drift, violation, or broken chain, `2` usage
+error - a missing file or bad argument never reads as a pass and never
+masquerades as drift.
+
+## Honest limits
+
+- The ledger is rewritable by anyone holding `appendRun`: the chain
+  proves that history was not edited in place, not who wrote it. There
+  is no signature.
+- `freeze()` embeds no timestamp or external anchor; "declared before
+  the run" is provable to anyone you gave the manifest to beforehand,
+  not from the artifact alone.
+- Wilson intervals gate a bar only when the bar opts in with
+  `bound: 'wilson-low'`; the default remains the point estimate, and the
+  interval is always reported.
+
+## Install
 
 ```bash
-npm install       # dev-only: typescript
+npm install github:m-sanchez/frozen-eval#v2.0.0
+```
+
+Not yet on npm; the pinned git tag is the supported install and CI proves
+the packed tarball imports cleanly. Zero runtime dependencies.
+
+## Develop
+
+```bash
+npm ci            # dev-only: typescript
 npm test
 npm run typecheck
 ```
 
-Node 22.6+ (erasable-syntax TypeScript, node runs it directly). Zero
-runtime dependencies.
+Node 22.18+ (erasable-syntax TypeScript; node runs the sources directly).
 
 ## The tests are the point
 
@@ -86,4 +121,7 @@ runtime dependencies.
 | a deleted run breaks the chain too | absence is as loud as alteration |
 | a bar over a missing metric fails | nothing passes by not being measured |
 | wilson(0, 0) is [0, 1] | total ignorance is never a confident point |
+| a lucky 6-of-7 clears the point bar and fails the wilson-low bar | intervals can gate, not just decorate |
+| a mixed boolean/number metric refuses to aggregate | n=1 by accident cannot clear anything |
+| an oversized corpus fails leakage closed | a check that could not run is not a check that passed |
 | freezing with no bars refuses | an eval with nothing to clear proves nothing |
