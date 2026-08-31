@@ -1,0 +1,40 @@
+{
+  "name": "frozen-eval",
+  "version": "1.0.0",
+  "description": "Evals you cannot quietly bend: corpus and bars frozen in one hash, fail-closed runs, a hash-chained results ledger, leakage checks that exit non-zero.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src",
+    "bin"
+  ],
+  "scripts": {
+    "test": "node --experimental-strip-types --test \"test/*.test.ts\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/m-sanchez/frozen-eval.git"
+  },
+  "author": "Miguel Sanchez <contact@miguelsanchez.co.uk>",
+  "license": "MIT",
+  "keywords": [
+    "evals",
+    "llm",
+    "benchmark",
+    "reproducibility",
+    "leakage",
+    "wilson-interval",
+    "typescript"
+  ],
+  "engines": {
+    "node": ">=22.6"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.0",
+    "typescript": "^5.7.0"
+  }
+}

@@ -1,0 +1,11 @@
+export { canonicalize, hashOf } from './canonical.ts';
+export { FrozenEvalError, freeze, splitHash, verifyCorpus, verifyManifest } from './manifest.ts';
+export type { Bar, Corpus, Item, Manifest } from './manifest.ts';
+export { aggregate, evaluateBars, wilson } from './stats.ts';
+export type { Aggregate, BarResult, ItemScores, MetricAggregate, Verdict, WilsonInterval } from './stats.ts';
+export { runEval } from './run.ts';
+export type { EvalRun, RunIdentity, RunInput } from './run.ts';
+export { appendRun, verifyLedger } from './ledger.ts';
+export type { LedgerEntry, LedgerVerdict } from './ledger.ts';
+export { checkLeakage } from './leakage.ts';
+export type { LeakageReport } from './leakage.ts';
