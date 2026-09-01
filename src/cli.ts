@@ -4,6 +4,7 @@
  *   frozen-eval freeze <corpus.json> <bars.json> [--holdout a,b]
  *   frozen-eval verify <corpus.json> <manifest.json>
  *   frozen-eval check <corpus.json> [--allow-unchecked-near-duplicates]
+ *                                    [--near-dup-threshold 0.8] [--max-violations 100]
  *   frozen-eval verify-ledger <runs.jsonl>
  *
  * Exit codes: 0 clean - 1 drift, violation, or broken chain - 2 usage error.
@@ -20,6 +21,7 @@ const USAGE =
   '  frozen-eval freeze <corpus.json> <bars.json> [--holdout a,b]\n' +
   '  frozen-eval verify <corpus.json> <manifest.json>\n' +
   '  frozen-eval check <corpus.json> [--allow-unchecked-near-duplicates]\n' +
+  '                                  [--near-dup-threshold 0.8] [--max-violations 100]\n' +
   '  frozen-eval verify-ledger <runs.jsonl>';
 
 class UsageError extends Error {}
@@ -28,6 +30,26 @@ function requireArg(args: string[], index: number, name: string): string {
   const value = args[index];
   if (value == null || value.startsWith('--')) throw new UsageError(`missing ${name}`);
   return value;
+}
+
+/** value of a `--flag value` pair, or undefined when the flag is absent. A
+ * flag present with nothing after it is a usage error, not a default. */
+function flagValue(args: string[], flag: string): string | undefined {
+  const at = args.indexOf(flag);
+  if (at < 0) return undefined;
+  const value = args[at + 1];
+  if (value == null || value.startsWith('--')) throw new UsageError(`${flag} needs a value`);
+  return value;
+}
+
+/** `{ key: value }` for a numeric flag, or `{}` when it is absent, so the
+ * option object never carries an explicit undefined over a default. */
+function numberFlag<K extends string>(args: string[], flag: string, key: K): Partial<Record<K, number>> {
+  const raw = flagValue(args, flag);
+  if (raw == null) return {};
+  const value = Number(raw);
+  if (!Number.isFinite(value)) throw new UsageError(`${flag} needs a number, got "${raw}"`);
+  return { [key]: value } as Record<K, number>;
 }
 
 function readJson(path: string, name: string): unknown {
@@ -77,7 +99,9 @@ export function main(argv: string[]): number {
         const corpus = readJson(requireArg(rest, 0, 'corpus path'), 'corpus');
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const report = checkLeakage(corpus as any, {
-          allowUncheckedNearDuplicates: rest.includes('--allow-unchecked-near-duplicates')
+          allowUncheckedNearDuplicates: rest.includes('--allow-unchecked-near-duplicates'),
+          ...numberFlag(rest, '--near-dup-threshold', 'nearDuplicateThreshold'),
+          ...numberFlag(rest, '--max-violations', 'maxViolations')
         });
         for (const v of report.violations) console.error(`leakage: ${v}`);
         if (report.nearDuplicateCheck.status === 'not-run') {

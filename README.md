@@ -43,12 +43,12 @@ exists to close:
   inconvenient one, or reordering history breaks the chain at that entry,
   and `verifyLedger` names the line.
 - **Leakage exits non-zero, and unknown never becomes pass.** Duplicate
-  ids, identical inputs frozen into two splits, near-duplicates across
-  splits (character-trigram Dice). The pair-wise near-dup check is
-  refused above a documented ceiling (default 5000 items, it is O(n^2)):
-  the report says `not-run`, the check fails closed, and the only way
-  past is an explicit `--allow-unchecked-near-duplicates`, which the
-  report records.
+  ids, the same input frozen into two splits, the same input twice inside
+  one split (which inflates its own denominator), and near-duplicates
+  across splits. The pair-wise near-dup check is refused above a documented
+  ceiling (default 5000 items, it is O(n^2)): the report says `not-run`,
+  the check fails closed, and the only way past is an explicit
+  `--allow-unchecked-near-duplicates`, which the report records.
 
 ```ts
 import { freeze, runEval, appendRun } from '@m-sanchez/frozen-eval';
@@ -76,6 +76,31 @@ denominator, and a bar may bind the Wilson lower bound instead of the
 point estimate (`bound: 'wilson-low'`), so a lucky small-n rate cannot
 clear a bar its interval does not support. The judge is yours; every
 field it returns becomes a metric a bar can bind.
+
+### Near-duplicates on a templated corpus
+
+Similarity is IDF-weighted character-trigram Dice, because almost every eval
+corpus is prompt-templated and plain Dice reads the shared instruction header
+as evidence of duplication. Measured: four unrelated MCQ questions behind one
+142-character header (capital of France, closest planet, who wrote Beloved,
+boiling point of water) scored 0.83-0.89 against each other under plain Dice,
+so all four cross-split pairs were flagged and `check` could not exit 0 on
+that corpus at all. Weighting each trigram by how rare it is across the corpus
+sends boilerplate to near-zero weight and leaves the item's own words carrying
+the similarity: the same four questions now report clean, and a fifth item
+that really is a paraphrase of one of them is still caught.
+
+`nearDuplicateThreshold` (`--near-dup-threshold`, default 0.8) is the dial.
+`maxViolations` (default 100) caps how many violation strings are built; the
+report always carries the true `violationCount`, so a broken corpus says
+`+9900 more violations not listed` instead of printing them.
+
+Timings at the 5000-item ceiling, median of five runs, one core of an Intel
+Core Ultra 7 155H under node 24: **2.8 s** for short distinct inputs (~88
+characters), **5.6 s** when every item also carries the 142-character header,
+which is the worst case - shared boilerplate is exactly what the cheap
+skip-this-pair test cannot rule out. Both scale as O(n^2) in items and O(1) in
+the length of each.
 
 ## Canonical bytes
 
@@ -164,4 +189,8 @@ Node 22.18+ (erasable-syntax TypeScript; node runs the sources directly).
 | a lucky 6-of-7 clears the point bar and fails the wilson-low bar | intervals can gate, not just decorate |
 | a mixed boolean/number metric refuses to aggregate | n=1 by accident cannot clear anything |
 | an oversized corpus fails leakage closed | a check that could not run is not a check that passed |
+| the shared instruction header is not evidence of a near-duplicate | the check survives a real templated corpus |
+| a genuinely copied item is still caught behind the same template | discounting boilerplate does not discount leakage |
+| an input repeated inside one split is a violation too | a denominator inflated by a copy is not the frozen one |
+| the violation list is capped instead of printing four million lines | a broken corpus should be readable |
 | freezing with no bars refuses | an eval with nothing to clear proves nothing |
