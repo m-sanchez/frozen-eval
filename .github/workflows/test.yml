@@ -25,3 +25,8 @@ jobs:
           npm init -y > /dev/null
           npm install "$GITHUB_WORKSPACE"/m-sanchez-frozen-eval-*.tgz
           node -e "import('@m-sanchez/frozen-eval').then(m => { if (Object.keys(m).length === 0) throw new Error('empty module'); console.log('import ok'); })"
+      - name: exit-code contract, against the installed binary
+        run: |
+          cd "$RUNNER_TEMP/scratch"
+          PKG="$PWD/node_modules/@m-sanchez/frozen-eval"
+          node "$GITHUB_WORKSPACE/scripts/cli-contract.mjs" "$PKG/dist/index.js" "$PWD/node_modules/.bin/frozen-eval"

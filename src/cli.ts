@@ -11,10 +11,12 @@
  * An unreadable file or a missing argument is a usage error, never a pass
  * and never confused with drift. */
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { checkLeakage } from './leakage.ts';
 import { verifyLedger } from './ledger.ts';
 import { FrozenEvalError, freeze, verifyCorpus } from './manifest.ts';
+import { parseBars, parseCorpus, parseManifest } from './parse.ts';
 
 const USAGE =
   'usage:\n' +
@@ -71,34 +73,31 @@ export function main(argv: string[]): number {
   try {
     switch (command) {
       case 'freeze': {
-        const corpus = readJson(requireArg(rest, 0, 'corpus path'), 'corpus');
-        const bars = readJson(requireArg(rest, 1, 'bars path'), 'bars');
+        const corpus = parseCorpus(readJson(requireArg(rest, 0, 'corpus path'), 'corpus'));
+        const bars = parseBars(readJson(requireArg(rest, 1, 'bars path'), 'bars'));
         const holdoutFlag = rest.indexOf('--holdout');
         const holdoutValue = holdoutFlag >= 0 ? rest[holdoutFlag + 1] : undefined;
         if (holdoutFlag >= 0 && (holdoutValue == null || holdoutValue.startsWith('--'))) {
           throw new UsageError('--holdout needs a comma-separated list of split names');
         }
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const manifest = freeze(corpus as any, bars as any, {
+        const manifest = freeze(corpus, bars, {
           holdout: holdoutValue ? holdoutValue.split(',') : []
         });
         console.log(JSON.stringify(manifest, null, 2));
         return 0;
       }
       case 'verify': {
-        const corpus = readJson(requireArg(rest, 0, 'corpus path'), 'corpus');
-        const manifest = readJson(requireArg(rest, 1, 'manifest path'), 'manifest');
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const problems = verifyCorpus(manifest as any, corpus as any);
+        const corpus = parseCorpus(readJson(requireArg(rest, 0, 'corpus path'), 'corpus'));
+        const manifest = parseManifest(readJson(requireArg(rest, 1, 'manifest path'), 'manifest'));
+        const problems = verifyCorpus(manifest, corpus);
         for (const p of problems) console.error(`drift: ${p}`);
         if (problems.length > 0) return 1;
         console.log('corpus matches the freeze');
         return 0;
       }
       case 'check': {
-        const corpus = readJson(requireArg(rest, 0, 'corpus path'), 'corpus');
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const report = checkLeakage(corpus as any, {
+        const corpus = parseCorpus(readJson(requireArg(rest, 0, 'corpus path'), 'corpus'));
+        const report = checkLeakage(corpus, {
           allowUncheckedNearDuplicates: rest.includes('--allow-unchecked-near-duplicates'),
           ...numberFlag(rest, '--near-dup-threshold', 'nearDuplicateThreshold'),
           ...numberFlag(rest, '--max-violations', 'maxViolations')
@@ -127,10 +126,8 @@ export function main(argv: string[]): number {
         if (corpusPath != null && manifestPath == null) {
           throw new UsageError('--corpus checks ids as part of replay, which needs --manifest');
         }
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const manifest = manifestPath != null ? (readJson(manifestPath, 'manifest') as any) : undefined;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const corpus = corpusPath != null ? (readJson(corpusPath, 'corpus') as any) : undefined;
+        const manifest = manifestPath != null ? parseManifest(readJson(manifestPath, 'manifest')) : undefined;
+        const corpus = corpusPath != null ? parseCorpus(readJson(corpusPath, 'corpus')) : undefined;
         const verdict = verifyLedger(text, { manifest, corpus });
         if (!verdict.intact) {
           console.error(`ledger broken at entry ${verdict.brokenAt}: ${verdict.reason}`);
@@ -162,8 +159,21 @@ export function main(argv: string[]): number {
   }
 }
 
-const invokedDirectly =
-  process.argv[1] != null && import.meta.url.endsWith(process.argv[1].replace(/\\/g, '/').split('/').pop()!);
-if (invokedDirectly) {
+/** Is this module the script node was asked to run? Comparing basenames -
+ * which is what this did - made `.../node_modules/@m-sanchez/frozen-eval/
+ * dist/cli.js` count as "invoked directly" for any consumer whose own entry
+ * script is also named cli.js, so importing the library parsed the host's
+ * argv and exited before the host's own code ran. Paths are compared
+ * through realpath so an npm bin symlink still counts. */
+export function isEntrypoint(moduleUrl: string, argv1: string | undefined): boolean {
+  if (argv1 == null) return false;
+  try {
+    return fileURLToPath(moduleUrl) === realpathSync(argv1);
+  } catch {
+    return false;
+  }
+}
+
+if (isEntrypoint(import.meta.url, process.argv[1])) {
   process.exit(main(process.argv.slice(2)));
 }

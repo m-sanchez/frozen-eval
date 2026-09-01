@@ -15,7 +15,8 @@
   },
   "files": [
     "dist",
-    "src"
+    "src",
+    "example"
   ],
   "scripts": {
     "test": "node --test \"test/*.test.ts\"",

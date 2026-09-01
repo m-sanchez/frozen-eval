@@ -9,5 +9,5 @@ export type { CorpusScores, EvalRun, RunIdentity, RunInput } from './run.ts';
 export { appendRun, verifyLedger } from './ledger.ts';
 export type { LedgerEntry, LedgerVerdict, VerifyLedgerOptions } from './ledger.ts';
 export { checkLeakage } from './leakage.ts';
-export { main as cliMain } from './cli.ts';
+export { InputShapeError, parseBars, parseCorpus, parseManifest } from './parse.ts';
 export type { LeakageOptions, LeakageReport } from './leakage.ts';

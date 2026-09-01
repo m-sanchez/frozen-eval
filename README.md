@@ -169,9 +169,17 @@ With it, every entry's aggregate is recomputed from its own perItem scores
 and every verdict from the manifest's own bars before it reports
 `ledger verified`.
 
+`example/corpus.json` and `example/bars.json` in the repo are the shapes
+those files take.
+
 Exit codes: `0` clean, `1` drift, violation, or broken chain, `2` usage
-error - a missing file or bad argument never reads as a pass and never
-masquerades as drift.
+error - a missing file, a bad argument, or a valid-JSON file of the wrong
+shape never reads as a pass and never masquerades as drift. The whole table
+is asserted by `scripts/cli-contract.mjs`, which CI runs a second time
+against the binary installed from the packed tarball: 26 cases covering
+every documented code, plus proof that a host script named `cli.js`,
+`cli.ts` or `index.js` can import the library and still reach its own last
+line.
 
 ## Honest limits
 
@@ -243,3 +251,7 @@ Node 22.18+ (erasable-syntax TypeScript; node runs the sources directly).
 | an input repeated inside one split is a violation too | a denominator inflated by a copy is not the frozen one |
 | the violation list is capped instead of printing four million lines | a broken corpus should be readable |
 | freezing with no bars refuses | an eval with nothing to clear proves nothing |
+| the entrypoint guard compares paths, not basenames | importing a library must not end the host process |
+| importing the library from a script named cli.js reaches the host's own last line | the same thing, end to end |
+| a valid-JSON file of the wrong shape is a usage error, not drift | a broken script is not a leaky corpus |
+| the documented exit codes hold against the CLI | the exit codes are the integration contract |

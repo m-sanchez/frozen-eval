@@ -1,0 +1,17 @@
+{
+  "dev": [
+    { "id": "d1", "input": "What was the total value of transfers in March?", "expected": 41230 },
+    { "id": "d2", "input": "List every account mentioned in the filing.", "expected": ["ACC-1", "ACC-7"] },
+    { "id": "d3", "input": "Was there any activity on the Sunday?", "expected": false },
+    { "id": "d4", "input": "Which vendor was paid twice for one invoice?", "expected": "Northgate Ltd" }
+  ],
+  "val": [
+    { "id": "v1", "input": "Sum the April transfers to the reserve account.", "expected": 12800 },
+    { "id": "v2", "input": "Who appears most often as an approver?", "expected": "R. Okafor" },
+    { "id": "v3", "input": "Name the quarter with the largest refund total.", "expected": "Q3" }
+  ],
+  "holdout": [
+    { "id": "h1", "input": "How many filings were amended after submission?", "expected": 3 },
+    { "id": "h2", "input": "Give the branch with no reported deposits.", "expected": "Dalston" }
+  ]
+}

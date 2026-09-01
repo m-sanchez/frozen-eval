@@ -1,0 +1,4 @@
+[
+  { "metric": "exact", "op": ">=", "value": 0.6, "bound": "wilson-low", "note": "the interval must support the claim, not just the point estimate" },
+  { "metric": "latencyMs", "op": "<=", "value": 2000 }
+]
