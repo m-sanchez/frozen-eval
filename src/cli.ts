@@ -163,12 +163,13 @@ export function main(argv: string[]): number {
  * which is what this did - made `.../node_modules/@m-sanchez/frozen-eval/
  * dist/cli.js` count as "invoked directly" for any consumer whose own entry
  * script is also named cli.js, so importing the library parsed the host's
- * argv and exited before the host's own code ran. Paths are compared
- * through realpath so an npm bin symlink still counts. */
+ * argv and exited before the host's own code ran. Both sides are resolved
+ * through realpath, so `node_modules/.bin/frozen-eval` still counts as this
+ * module however node reports the entry point it followed to get here. */
 export function isEntrypoint(moduleUrl: string, argv1: string | undefined): boolean {
   if (argv1 == null) return false;
   try {
-    return fileURLToPath(moduleUrl) === realpathSync(argv1);
+    return realpathSync(fileURLToPath(moduleUrl)) === realpathSync(argv1);
   } catch {
     return false;
   }
