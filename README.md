@@ -109,6 +109,30 @@ which is the worst case - shared boilerplate is exactly what the cheap
 skip-this-pair test cannot rule out. Both scale as O(n^2) in items and O(1) in
 the length of each.
 
+### Metrics that are not per-item
+
+Calibration error, macro-F1, worst-group gap and pass@k are numbers about
+the run, not about any item, so they cannot come out of `judge`. Splicing
+one into `run.aggregate` afterwards and calling `evaluateBars` again
+produces a verdict that carries no manifest hash and can never enter a
+ledger - the one number the eval existed to gate on ends up the one number
+outside the freeze. `corpusJudge` runs inside it:
+
+```ts
+const run = await runEval({
+  manifest, corpus, split: 'val',
+  judge: (item) => ({ exact: answer(item) === item.expected }),
+  corpusJudge: (perItem) => ({ worstGroupGap: gapAcross(perItem) }),
+  label: 'model-x prompt-v3'
+});
+run.verdict;   // bars over exact AND worstGroupGap, inside the manifest binding
+```
+
+It is called once, after the per-item loop, over the scores that loop
+produced. A name that collides with a per-item metric throws (a bar could
+not say which it meant), a non-finite value throws, and a bar over a metric
+the corpus judge did not return fails closed like any other absent metric.
+
 ## Canonical bytes
 
 Every hash here - split, manifest, ledger entry - is SHA-256 over one
@@ -160,6 +184,11 @@ masquerades as drift.
 - Wilson intervals gate a bar only when the bar opts in with
   `bound: 'wilson-low'`; the default remains the point estimate, and the
   interval is always reported.
+- A corpus-level metric is not derived from any one item, so `verifyLedger`
+  cannot recompute it from `perItem` alone: without `corpusJudge` in the
+  options it is taken as recorded, and only the verdict that follows from it
+  is checked. Hand replay the same `corpusJudge` and it is recomputed like
+  everything else.
 - The canonical magnitude floor is a real ceiling on run size. A rate below
   `1e-4` cannot be hashed, so a run with exactly one success needs `n < 10001`
   for the rate and `n < 1766` for its Wilson lower bound
@@ -205,6 +234,9 @@ Node 22.18+ (erasable-syntax TypeScript; node runs the sources directly).
 | wilson(0, 0) is [0, 1] | total ignorance is never a confident point |
 | a lucky 6-of-7 clears the point bar and fails the wilson-low bar | intervals can gate, not just decorate |
 | a mixed boolean/number metric refuses to aggregate | n=1 by accident cannot clear anything |
+| a corpus-level metric is measured inside the freeze and gates a bar | the headline number is not spliced in afterwards |
+| a corpus metric cannot quietly take a per-item metric name | a bar always knows which number it binds |
+| replay recomputes a corpus metric when it is handed the same judge | the un-replayable part is named, not assumed |
 | an oversized corpus fails leakage closed | a check that could not run is not a check that passed |
 | the shared instruction header is not evidence of a near-duplicate | the check survives a real templated corpus |
 | a genuinely copied item is still caught behind the same template | discounting boilerplate does not discount leakage |

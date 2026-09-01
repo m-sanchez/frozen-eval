@@ -44,6 +44,10 @@ export interface MetricAggregate {
    * denominator that shrank without saying so is not evidence. */
   expected: number;
   wilson?: WilsonInterval;
+  /** present only on metrics a corpusJudge produced. They are not derived
+   * from any single item, so a replay cannot recompute one from perItem
+   * scores alone - it needs the same corpusJudge. */
+  source?: 'corpus';
 }
 
 export type Aggregate = Record<string, MetricAggregate>;

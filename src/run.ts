@@ -7,6 +7,8 @@ import type { Corpus, Item, Manifest } from './manifest.ts';
 import { aggregate, evaluateBars } from './stats.ts';
 import type { Aggregate, ItemScores, Verdict } from './stats.ts';
 
+export type CorpusScores = Record<string, number>;
+
 export interface RunIdentity {
   label: string;
   split: string;
@@ -30,11 +32,38 @@ export interface RunInput {
   split: string;
   /** score one item; every returned field becomes a metric */
   judge: (item: Item) => ItemScores | Promise<ItemScores>;
+  /** score the run as a whole. Calibration error, macro-F1, worst-group
+   * gap, pass@k: numbers that are not any item's score and so cannot come
+   * out of `judge`. Called once, after the per-item loop, over the scores
+   * it produced; every field becomes a metric a bar can bind, inside the
+   * manifest binding and inside the EvalRun that goes into the ledger.
+   * Splicing such a metric in afterwards puts it outside the freeze. */
+  corpusJudge?: (perItem: EvalRun['perItem']) => CorpusScores | Promise<CorpusScores>;
   /** who or what ran: model id, config, prompt version - your words */
   label: string;
   /** required to touch a holdout split */
   regression?: boolean;
   extras?: Record<string, string>;
+}
+
+/** Fold corpus-level numbers into the aggregate. A collision with a
+ * per-item metric is refused rather than resolved: a bar naming the metric
+ * could not say which of the two it meant. */
+export function mergeCorpusScores(agg: Aggregate, scores: CorpusScores, expectedN: number): Aggregate {
+  for (const [name, value] of Object.entries(scores)) {
+    if (name in agg) {
+      throw new FrozenEvalError(
+        `corpus metric "${name}" collides with a per-item metric of the same name; a bar could not say which it meant`
+      );
+    }
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      throw new FrozenEvalError(
+        `corpus metric "${name}" is ${String(value)}, not a finite number; an eval that cannot compute its own number has not cleared anything`
+      );
+    }
+    agg[name] = { kind: 'mean', value, n: expectedN, expected: expectedN, source: 'corpus' };
+  }
+  return agg;
 }
 
 export async function runEval(input: RunInput): Promise<EvalRun> {
@@ -63,6 +92,9 @@ export async function runEval(input: RunInput): Promise<EvalRun> {
     perItem.map((p) => p.scores),
     items.length
   );
+  if (input.corpusJudge) {
+    mergeCorpusScores(agg, await input.corpusJudge(perItem), items.length);
+  }
   return {
     identity: {
       label,

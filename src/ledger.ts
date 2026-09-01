@@ -16,7 +16,8 @@
 import { hashOf } from './canonical.ts';
 import { FrozenEvalError } from './manifest.ts';
 import type { Corpus, Manifest } from './manifest.ts';
-import type { EvalRun } from './run.ts';
+import { mergeCorpusScores } from './run.ts';
+import type { CorpusScores, EvalRun } from './run.ts';
 import { aggregate, evaluateBars } from './stats.ts';
 import type { Aggregate } from './stats.ts';
 
@@ -64,6 +65,11 @@ export interface VerifyLedgerOptions {
   /** the frozen corpus, so each entry's scored ids can be held to the ids
    * the split actually froze */
   corpus?: Corpus;
+  /** the same corpusJudge the runs used. A corpus-level metric is not
+   * derived from any single item, so without this replay can only take it
+   * as recorded; with it, the number is recomputed like the rest. Must be
+   * synchronous - verifyLedger is not async. */
+  corpusJudge?: (perItem: EvalRun['perItem']) => CorpusScores;
 }
 
 export function verifyLedger(ledgerText: string, opts: VerifyLedgerOptions = {}): LedgerVerdict {
@@ -96,7 +102,7 @@ export function verifyLedger(ledgerText: string, opts: VerifyLedgerOptions = {})
     if (opts.manifest) {
       let reason: string | undefined;
       try {
-        reason = replay(entry.body, opts.manifest, opts.corpus);
+        reason = replay(entry.body, opts.manifest, opts);
       } catch (err) {
         reason = `entry could not be replayed: ${(err as Error).message}`;
       }
@@ -109,7 +115,8 @@ export function verifyLedger(ledgerText: string, opts: VerifyLedgerOptions = {})
 
 /** Recompute an entry from what the entry itself carries. Returns the reason
  * it does not hold up, or undefined if it does. */
-function replay(run: EvalRun, manifest: Manifest, corpus?: Corpus): string | undefined {
+function replay(run: EvalRun, manifest: Manifest, opts: VerifyLedgerOptions): string | undefined {
+  const corpus = opts.corpus;
   const identity = run?.identity;
   if (identity == null) return 'entry has no identity';
   if (identity.manifestHash !== manifest.manifestHash) {
@@ -144,10 +151,32 @@ function replay(run: EvalRun, manifest: Manifest, corpus?: Corpus): string | und
   } catch (err) {
     return `perItem scores do not aggregate: ${(err as Error).message}`;
   }
-  if (hashOf(recomputed) !== hashOf(run.aggregate ?? {})) {
+  // corpusJudge metrics are not derived from any single item, so they are
+  // separated out: the per-item half must match what perItem produces, and
+  // the corpus half is only recomputable with the same corpusJudge.
+  const recordedPerItem: Aggregate = {};
+  const recordedCorpus: Aggregate = {};
+  for (const [name, metric] of Object.entries(run.aggregate ?? {})) {
+    if (metric != null && metric.source === 'corpus') recordedCorpus[name] = metric;
+    else recordedPerItem[name] = metric;
+  }
+  if (hashOf(recomputed) !== hashOf(recordedPerItem)) {
     return "the recorded aggregate is not the one this entry's own perItem scores produce";
   }
-  const verdict = evaluateBars(recomputed, manifest.bars);
+  if (opts.corpusJudge) {
+    let replayedCorpus: Aggregate;
+    try {
+      replayedCorpus = mergeCorpusScores({}, opts.corpusJudge(perItem), identity.itemCount);
+    } catch (err) {
+      return `the supplied corpusJudge did not reproduce this entry: ${(err as Error).message}`;
+    }
+    for (const name of new Set([...Object.keys(replayedCorpus), ...Object.keys(recordedCorpus)])) {
+      if (hashOf(replayedCorpus[name] ?? null) !== hashOf(recordedCorpus[name] ?? null)) {
+        return `corpus metric "${name}" is not the one the supplied corpusJudge produces`;
+      }
+    }
+  }
+  const verdict = evaluateBars({ ...recomputed, ...recordedCorpus }, manifest.bars);
   if (hashOf(verdict) !== hashOf(run.verdict ?? {})) {
     return "the recorded verdict is not the one the manifest's bars produce over this aggregate";
   }
