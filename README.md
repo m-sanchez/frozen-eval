@@ -6,6 +6,8 @@
 [![CI](https://github.com/m-sanchez/frozen-eval/actions/workflows/test.yml/badge.svg)](https://github.com/m-sanchez/frozen-eval/actions/workflows/test.yml)
 ![License](https://img.shields.io/badge/license-MIT-6E6E6E)
 
+> **In plain English:** this locks your test set so it cannot drift or leak into training, giving you evaluation scores you can trust over time.
+
 Evals you cannot quietly bend.
 
 [More tools](https://github.com/m-sanchez) ·
