@@ -51,10 +51,12 @@ const brokenLedgerPath = write(
 );
 
 let failures = 0;
+let cases = 0;
 const run = (args) => spawnSync(cli[0], [...cli.slice(1), ...args], { encoding: 'utf8' });
-const expect = (code, args, why) => {
+const expect = (code, args, why, says) => {
+  cases++;
   const r = run(args);
-  const ok = r.status === code;
+  const ok = r.status === code && (says == null || says.test(r.stdout));
   if (!ok) failures++;
   const shown = args.map((a) => (a.startsWith(dir) ? a.slice(dir.length + 1) : a)).join(' ');
   console.log(`${ok ? 'ok  ' : 'FAIL'} exit ${r.status} (want ${code})  ${shown}  - ${why}`);
@@ -79,6 +81,7 @@ const manifestPath = write('manifest.json', frozen.stdout);
 const manifest = JSON.parse(frozen.stdout);
 expect(0, ['verify', corpusPath, manifestPath], 'the corpus still matches the freeze');
 expect(0, ['check', corpusPath], 'a clean corpus');
+expect(1, ['check', corpusPath, '--near-dup-threshold', '0.2'], 'and not clean at a threshold of 0.2');
 expect(0, ['verify-ledger', emptyLedgerPath], 'an empty ledger is a chain of nothing');
 
 // --- 1: drift, violation, broken chain ---
@@ -95,8 +98,8 @@ const honest = await runEval({
   label: 'contract'
 });
 const ledgerPath = write('runs.jsonl', appendRun('', honest));
-expect(0, ['verify-ledger', ledgerPath], 'an honest chain');
-expect(0, ['verify-ledger', ledgerPath, '--manifest', manifestPath], 'and it replays');
+expect(0, ['verify-ledger', ledgerPath], 'an honest chain, and it says it did not replay', /not replayed/);
+expect(0, ['verify-ledger', ledgerPath, '--manifest', manifestPath], 'and it replays', /ledger verified/);
 expect(0, ['verify-ledger', ledgerPath, '--manifest', manifestPath, '--corpus', corpusPath], 'ids too');
 expect(2, ['verify-ledger', ledgerPath, '--corpus', corpusPath], '--corpus without --manifest');
 expect(2, ['verify-ledger', ledgerPath, '--manifest', at('no-such.json')], 'unreadable manifest');
@@ -120,10 +123,15 @@ for (const name of ['cli.js', 'cli.ts', 'index.js']) {
   );
   const r = spawnSync(process.execPath, [host, 'freeze', 'nope.json'], { encoding: 'utf8' });
   const ok = r.status === 0 && r.stdout.includes('HOST REACHED ITS OWN LAST LINE');
+  cases++;
   if (!ok) failures++;
   console.log(`${ok ? 'ok  ' : 'FAIL'} a host script named ${name} imports the library and keeps running`);
   if (!ok) console.log(`     status ${r.status}\n     stdout: ${r.stdout.trim()}\n     stderr: ${r.stderr.trim()}`);
 }
 
-console.log(failures === 0 ? 'cli contract: all cases hold' : `cli contract: ${failures} case(s) failed`);
+console.log(
+  failures === 0
+    ? `cli contract: all ${cases} cases hold`
+    : `cli contract: ${failures} of ${cases} case(s) failed`
+);
 process.exit(failures === 0 ? 0 : 1);

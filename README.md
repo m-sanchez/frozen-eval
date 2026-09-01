@@ -71,7 +71,7 @@ const run = await runEval({
   label: 'model-x prompt-v3'
 });
 
-run.aggregate.exact;   // { kind: 'rate', value, n, wilson: { low, high } }
+run.aggregate.exact;   // { kind: 'rate', value, n, expected, wilson: { low, high } }
 run.verdict;           // every bar, with its value, pass or fail
 ledger = appendRun(ledger, run);   // the only honest operation the format supports
 ```
@@ -133,6 +133,24 @@ produced. A name that collides with a per-item metric throws (a bar could
 not say which it meant), a non-finite value throws, and a bar over a metric
 the corpus judge did not return fails closed like any other absent metric.
 
+### Comparing two runs
+
+frozen-eval does not compare runs; `@m-sanchez/ab-significance` already
+does, and its `Outcome` shape is one map away from `perItem`:
+
+```ts
+import { compareModels } from '@m-sanchez/ab-significance';
+
+const outcomes = (run) => run.perItem.map((p) => ({ id: p.id, correct: p.scores.exact }));
+compareModels(outcomes(baseline), outcomes(candidate), { minEffectPct: 2 });
+```
+
+An item the judge produced no `exact` for arrives as `correct: undefined`,
+which is exactly what `pairedTable` excludes from the common-valid subset
+and names - so a run that skipped items does not flatter itself here
+either. Building a diff command in frozen-eval would duplicate McNemar and
+the paired bootstrap for no gain.
+
 ## Canonical bytes
 
 Every hash here - split, manifest, ledger entry - is SHA-256 over one
@@ -176,7 +194,7 @@ Exit codes: `0` clean, `1` drift, violation, or broken chain, `2` usage
 error - a missing file, a bad argument, or a valid-JSON file of the wrong
 shape never reads as a pass and never masquerades as drift. The whole table
 is asserted by `scripts/cli-contract.mjs`, which CI runs a second time
-against the binary installed from the packed tarball: 26 cases covering
+against the binary installed from the packed tarball: 27 cases covering
 every documented code, plus proof that a host script named `cli.js`,
 `cli.ts` or `index.js` can import the library and still reach its own last
 line.
@@ -211,7 +229,7 @@ npm install @m-sanchez/frozen-eval
 ```
 
 Also installable from a pinned git tag:
-`github:m-sanchez/frozen-eval#v2.0.1`. CI proves the packed tarball imports
+`github:m-sanchez/frozen-eval#v3.0.0`. CI proves the packed tarball imports
 cleanly. Zero runtime dependencies.
 
 ## Develop
@@ -226,13 +244,19 @@ Node 22.18+ (erasable-syntax TypeScript; node runs the sources directly).
 
 ## The tests are the point
 
+[`CLAIMS.md`](CLAIMS.md) maps every falsifiable claim on this page, and in
+the package description, to the test that holds it up - and names the few
+that no test holds up, and why. The table below is the short version.
+
 | Test | Claim |
 | :-- | :-- |
 | editing a bar after the freeze is detectable by anyone | the bar lives inside the hash the corpus lives inside |
 | a drifted split refuses to run | fail-closed, not fail-quiet |
+| a split the manifest never froze refuses to run | you cannot score against something undeclared |
 | the holdout throws without a declared regression | the loop cannot spend its own safety net |
 | an edited past run breaks the ledger at that entry | history defends itself, with a line number |
 | a deleted run breaks the chain too | absence is as loud as alteration |
+| reordering two runs breaks the chain as loudly as deleting one | order is part of what was committed to |
 | a ledger of internally consistent lies fails replay, though the chain is intact | the chain proves custody, replay proves arithmetic |
 | an entry run against a different manifest is named | a result belongs to the freeze it was run under |
 | appendRun refuses to extend a chain that does not verify | you cannot build on a history you cannot vouch for |
@@ -241,6 +265,7 @@ Node 22.18+ (erasable-syntax TypeScript; node runs the sources directly).
 | a bar may opt in to partial coverage, and the opt-in is in the manifest | the exception is declared, not assumed |
 | wilson(0, 0) is [0, 1] | total ignorance is never a confident point |
 | a lucky 6-of-7 clears the point bar and fails the wilson-low bar | intervals can gate, not just decorate |
+| numeric metrics aggregate to a mean over the values that were produced | the README's two aggregation kinds both exist |
 | a mixed boolean/number metric refuses to aggregate | n=1 by accident cannot clear anything |
 | a corpus-level metric is measured inside the freeze and gates a bar | the headline number is not spliced in afterwards |
 | a corpus metric cannot quietly take a per-item metric name | a bar always knows which number it binds |
@@ -251,6 +276,10 @@ Node 22.18+ (erasable-syntax TypeScript; node runs the sources directly).
 | an input repeated inside one split is a violation too | a denominator inflated by a copy is not the frozen one |
 | the violation list is capped instead of printing four million lines | a broken corpus should be readable |
 | freezing with no bars refuses | an eval with nothing to clear proves nothing |
+| zero runtime dependencies, as the badge and the README both say | the badge is checked, not painted |
+| the canonical magnitude floor bites exactly where Honest limits says | the published numbers are executed |
+| the README states the number of cases the exit-code contract actually runs | the count cannot go stale |
+| perItem maps to ab-significance's Outcome in one line | the documented bridge to the sibling package is real |
 | the entrypoint guard compares paths, not basenames | importing a library must not end the host process |
 | importing the library from a script named cli.js reaches the host's own last line | the same thing, end to end |
 | a valid-JSON file of the wrong shape is a usage error, not drift | a broken script is not a leaky corpus |

@@ -243,3 +243,58 @@ test('a bar may opt in to partial coverage, and the opt-in is in the manifest', 
   // and the opt-in cannot be added after the fact
   assert.ok(!verifyManifest({ ...m, bars: [{ ...bars[0], minCoverage: 0.1 }] }));
 });
+
+test('a split the manifest never froze refuses to run', async () => {
+  await assert.rejects(
+    runEval({
+      manifest,
+      corpus: { ...CORPUS, sneaked: [item('s1', 'a split that was never declared')] },
+      split: 'sneaked',
+      judge: perfectJudge,
+      label: 'x'
+    }),
+    /never frozen/
+  );
+});
+
+test('reordering two runs breaks the chain as loudly as deleting one', async () => {
+  const runA = await runEval({ manifest, corpus: CORPUS, split: 'dev', judge: perfectJudge, label: 'a' });
+  const runB = await runEval({ manifest, corpus: CORPUS, split: 'val', judge: perfectJudge, label: 'b' });
+  const lines = appendRun(appendRun('', runA), runB).split('\n').filter((l) => l.length > 0);
+  const swapped = [lines[1], lines[0]].join('\n') + '\n';
+  const verdict = verifyLedger(swapped);
+  assert.ok(!verdict.intact);
+  assert.equal(verdict.brokenAt, 0);
+  assert.match(verdict.reason!, /deletion or reorder/);
+});
+
+test('numeric metrics aggregate to a mean over the values that were produced', async () => {
+  const { aggregate } = await import('../src/stats.ts');
+  const agg = aggregate([{ latencyMs: 10 }, { latencyMs: 20 }, { latencyMs: 30 }]);
+  assert.equal(agg.latencyMs.kind, 'mean');
+  assert.equal(agg.latencyMs.value, 20);
+  assert.equal(agg.latencyMs.n, 3);
+  assert.equal(agg.latencyMs.wilson, undefined, 'a mean has no rate interval');
+});
+
+test("perItem maps to ab-significance's Outcome in one line", async () => {
+  const run = await runEval({
+    manifest,
+    corpus: CORPUS,
+    split: 'dev',
+    judge: (it): ItemScores => (it.id === 'd3' ? {} : { exact: it.id === 'd1', latencyMs: 5 }),
+    label: 'bridge'
+  });
+  // the README's adapter, verbatim
+  const outcomes = run.perItem.map((p) => ({ id: p.id, correct: p.scores.exact }));
+  assert.deepEqual(outcomes, [
+    { id: 'd1', correct: true },
+    { id: 'd2', correct: false },
+    { id: 'd3', correct: undefined }
+  ]);
+  // ab-significance's Outcome is { id: string; correct: boolean | null | undefined }
+  for (const o of outcomes) {
+    assert.equal(typeof o.id, 'string');
+    assert.ok(o.correct === undefined || typeof o.correct === 'boolean');
+  }
+});
