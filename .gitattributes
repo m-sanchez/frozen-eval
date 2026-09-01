@@ -1,0 +1,2 @@
+# the shared canonical-form fixture is a byte-identical copy across packages
+test/fixtures/canonical-form.fixture.json -text

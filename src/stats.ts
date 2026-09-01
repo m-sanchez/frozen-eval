@@ -22,7 +22,14 @@ export function wilson(k: number, n: number): WilsonInterval {
   const denom = 1 + z2 / n;
   const centre = (p + z2 / (2 * n)) / denom;
   const spread = (Z * Math.sqrt((p * (1 - p)) / n + z2 / (4 * n * n))) / denom;
-  return { low: Math.max(0, centre - spread), high: Math.min(1, centre + spread) };
+  // At k = 0 the centre and the spread are the same quantity, so the lower
+  // bound is exactly 0; at k = n they sum to exactly 1. Computing them
+  // separately leaves a float residue (wilson(0, 3).low came out as
+  // 5.55e-17), which is a number the canonical form cannot write portably.
+  return {
+    low: k === 0 ? 0 : Math.max(0, centre - spread),
+    high: k === n ? 1 : Math.min(1, centre + spread)
+  };
 }
 
 export type ItemScores = Record<string, boolean | number>;

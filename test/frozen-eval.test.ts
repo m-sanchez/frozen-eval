@@ -184,3 +184,24 @@ test('CLI: usage errors exit 2 and never masquerade as drift', async () => {
   assert.equal(main(['verify', 'no-such-file.json', 'also-missing.json']), 2);
   assert.equal(main(['--help']), 0);
 });
+
+test('a run where a metric was false for every item is hashable', async () => {
+  // wilson(0, n).low is exactly 0 in algebra; a float residue of 5.5e-17
+  // is below the canonical magnitude floor, so the whole run refuses to hash.
+  const run = await runEval({
+    manifest,
+    corpus: CORPUS,
+    split: 'dev',
+    judge: () => ({ exact: false, latencyMs: 5 }),
+    label: 'all-wrong'
+  });
+  assert.equal(run.aggregate.exact.wilson!.low, 0);
+  assert.doesNotThrow(() => appendRun('', run));
+});
+
+test('wilson: the algebraic boundaries are exact, not float residue', () => {
+  for (let n = 1; n <= 200; n++) {
+    assert.equal(wilson(0, n).low, 0, `wilson(0, ${n}).low`);
+    assert.equal(wilson(n, n).high, 1, `wilson(${n}, ${n}).high`);
+  }
+});

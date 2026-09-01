@@ -72,6 +72,24 @@ point estimate (`bound: 'wilson-low'`), so a lucky small-n rate cannot
 clear a bar its interval does not support. The judge is yours; every
 field it returns becomes a metric a bar can bind.
 
+## Canonical bytes
+
+Every hash here - split, manifest, ledger entry - is SHA-256 over one
+canonical text, shared with the other packages in this family so the same
+object hashes to the same string in all of them:
+
+> Object keys sorted by code unit, no insignificant whitespace,
+> undefined-valued properties omitted, strings JSON-escaped, SHA-256 hex over
+> UTF-8. Numbers: finite only; -0 normalised to 0; integer-valued numbers must
+> be SAFE integers and print as integers; non-integers must satisfy
+> `|x| >= 1e-4` and print as the shortest round-trip decimal. The floor exists
+> because JS writes `0.000007` where Python writes `7e-06` - refusing those
+> values is what makes the byte form portable across languages.
+
+The rule is held to a fixture (`test/fixtures/canonical-form.fixture.json`,
+27 accept cases with their expected text and digest, 8 reject cases) that is a
+byte-identical copy of the one the sibling packages use.
+
 ## CLI
 
 Installed with the package (`npx frozen-eval` after install):
@@ -98,6 +116,12 @@ masquerades as drift.
 - Wilson intervals gate a bar only when the bar opts in with
   `bound: 'wilson-low'`; the default remains the point estimate, and the
   interval is always reported.
+- The canonical magnitude floor is a real ceiling on run size. A rate below
+  `1e-4` cannot be hashed, so a run with exactly one success needs `n < 10001`
+  for the rate and `n < 1766` for its Wilson lower bound
+  (`wilson(1, 1766).low = 0.00009996`). Past that, `appendRun` refuses the run
+  rather than writing bytes another language would read differently. Zero
+  successes is fine at any `n`: that bound is exactly 0.
 
 ## Install
 
