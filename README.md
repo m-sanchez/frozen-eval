@@ -5,6 +5,7 @@
 ![Dependencies](https://img.shields.io/badge/dependencies-0-B45309)
 [![CI](https://github.com/m-sanchez/frozen-eval/actions/workflows/test.yml/badge.svg)](https://github.com/m-sanchez/frozen-eval/actions/workflows/test.yml)
 ![License](https://img.shields.io/badge/license-MIT-6E6E6E)
+[![npm](https://img.shields.io/npm/v/@m-sanchez/frozen-eval?color=CB3837&logo=npm&logoColor=white)](https://www.npmjs.com/package/@m-sanchez/frozen-eval)
 
 > **In plain English:** this locks your test set so it cannot drift or leak into training, giving you evaluation scores you can trust over time.
 
@@ -13,6 +14,10 @@ Evals you cannot quietly bend.
 [More tools](https://github.com/m-sanchez) ·
 [Working rules](https://miguelsanchez.co.uk/ethics) ·
 [Worked example: routing-study](https://github.com/m-sanchez/routing-study)
+
+*Provenance: a fresh, dependency-free implementation of standard methods,
+written to test the systems the other tools came from. First published
+2026-08-31.*
 
 An eval proves something only while nobody can move it after seeing a
 result. Every guarantee here is mechanical, and each has a failure mode it
@@ -41,7 +46,7 @@ exists to close:
   report records.
 
 ```ts
-import { freeze, runEval, appendRun } from 'frozen-eval';
+import { freeze, runEval, appendRun } from '@m-sanchez/frozen-eval';
 
 const manifest = freeze(corpus, [
   { metric: 'exact', op: '>=', value: 0.85 },
@@ -97,11 +102,12 @@ masquerades as drift.
 ## Install
 
 ```bash
-npm install github:m-sanchez/frozen-eval#v2.0.0
+npm install @m-sanchez/frozen-eval
 ```
 
-Not yet on npm; the pinned git tag is the supported install and CI proves
-the packed tarball imports cleanly. Zero runtime dependencies.
+Also installable from a pinned git tag:
+`github:m-sanchez/frozen-eval#v2.0.1`. CI proves the packed tarball imports
+cleanly. Zero runtime dependencies.
 
 ## Develop
 

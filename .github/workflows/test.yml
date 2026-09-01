@@ -23,5 +23,5 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/scratch" && cd "$RUNNER_TEMP/scratch"
           npm init -y > /dev/null
-          npm install "$GITHUB_WORKSPACE"/frozen-eval-*.tgz
-          node -e "import('frozen-eval').then(m => { if (Object.keys(m).length === 0) throw new Error('empty module'); console.log('import ok'); })"
+          npm install "$GITHUB_WORKSPACE"/m-sanchez-frozen-eval-*.tgz
+          node -e "import('@m-sanchez/frozen-eval').then(m => { if (Object.keys(m).length === 0) throw new Error('empty module'); console.log('import ok'); })"
