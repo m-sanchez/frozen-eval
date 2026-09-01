@@ -9,7 +9,8 @@
 Evals you cannot quietly bend.
 
 [More tools](https://github.com/m-sanchez) ·
-[Working rules](https://miguelsanchez.co.uk/ethics)
+[Working rules](https://miguelsanchez.co.uk/ethics) ·
+[Worked example: routing-study](https://github.com/m-sanchez/routing-study)
 
 An eval proves something only while nobody can move it after seeing a
 result. Every guarantee here is mechanical, and each has a failure mode it
