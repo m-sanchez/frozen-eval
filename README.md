@@ -38,10 +38,17 @@ exists to close:
 - **The holdout answers regressions only.** Splits marked `holdout` at
   freeze time throw unless the run declares `regression: true`; the
   day-to-day loop cannot spend the split that exists to catch it.
-- **Results are a hash chain.** The ledger is append-only JSONL where each
-  entry commits to the previous one. Editing a past run, deleting an
-  inconvenient one, or reordering history breaks the chain at that entry,
-  and `verifyLedger` names the line.
+- **Results are a hash chain, and the chain is not the whole check.** The
+  ledger is append-only JSONL where each entry commits to the previous one.
+  Editing a past run, deleting an inconvenient one, or reordering history
+  breaks the chain at that entry, and `verifyLedger` names the line. But a
+  chain only proves nobody edited history after writing it - an entry whose
+  aggregate and verdict were written to say whatever was wanted chains
+  perfectly well. Hand `verifyLedger` the manifest and it replays instead:
+  each aggregate recomputed from the entry's own perItem scores, each
+  verdict recomputed from the manifest's own bars, and with `corpus` the
+  scored ids held to the ids the split froze. Without a manifest the CLI
+  says `chain intact ... (not replayed)`, because that is what it checked.
 - **Leakage exits non-zero, and unknown never becomes pass.** Duplicate
   ids, the same input frozen into two splits, the same input twice inside
   one split (which inflates its own denominator), and near-duplicates
@@ -129,7 +136,14 @@ frozen-eval freeze corpus.json bars.json > manifest.json
 frozen-eval verify corpus.json manifest.json   # exit 1 on drift
 frozen-eval check corpus.json                  # exit 1 on leakage or an unrun check
 frozen-eval verify-ledger runs.jsonl           # exit 1 on a broken chain
+frozen-eval verify-ledger runs.jsonl --manifest manifest.json [--corpus corpus.json]
 ```
+
+Without `--manifest`, `verify-ledger` walks the chain and says so:
+`chain intact: 3 run(s) (not replayed; pass --manifest to verify results)`.
+With it, every entry's aggregate is recomputed from its own perItem scores
+and every verdict from the manifest's own bars before it reports
+`ledger verified`.
 
 Exit codes: `0` clean, `1` drift, violation, or broken chain, `2` usage
 error - a missing file or bad argument never reads as a pass and never
@@ -182,6 +196,9 @@ Node 22.18+ (erasable-syntax TypeScript; node runs the sources directly).
 | the holdout throws without a declared regression | the loop cannot spend its own safety net |
 | an edited past run breaks the ledger at that entry | history defends itself, with a line number |
 | a deleted run breaks the chain too | absence is as loud as alteration |
+| a ledger of internally consistent lies fails replay, though the chain is intact | the chain proves custody, replay proves arithmetic |
+| an entry run against a different manifest is named | a result belongs to the freeze it was run under |
+| appendRun refuses to extend a chain that does not verify | you cannot build on a history you cannot vouch for |
 | a bar over a missing metric fails | nothing passes by not being measured |
 | a metric measured on 5 of 20 items does not clear its bar | 75% absence fails like total absence |
 | a bar may opt in to partial coverage, and the opt-in is in the manifest | the exception is declared, not assumed |

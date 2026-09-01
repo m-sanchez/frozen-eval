@@ -6,7 +6,7 @@ export type { Aggregate, BarResult, ItemScores, MetricAggregate, Verdict, Wilson
 export { runEval } from './run.ts';
 export type { EvalRun, RunIdentity, RunInput } from './run.ts';
 export { appendRun, verifyLedger } from './ledger.ts';
-export type { LedgerEntry, LedgerVerdict } from './ledger.ts';
+export type { LedgerEntry, LedgerVerdict, VerifyLedgerOptions } from './ledger.ts';
 export { checkLeakage } from './leakage.ts';
 export { main as cliMain } from './cli.ts';
 export type { LeakageOptions, LeakageReport } from './leakage.ts';

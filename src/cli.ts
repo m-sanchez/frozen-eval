@@ -5,7 +5,7 @@
  *   frozen-eval verify <corpus.json> <manifest.json>
  *   frozen-eval check <corpus.json> [--allow-unchecked-near-duplicates]
  *                                    [--near-dup-threshold 0.8] [--max-violations 100]
- *   frozen-eval verify-ledger <runs.jsonl>
+ *   frozen-eval verify-ledger <runs.jsonl> [--manifest m.json] [--corpus c.json]
  *
  * Exit codes: 0 clean - 1 drift, violation, or broken chain - 2 usage error.
  * An unreadable file or a missing argument is a usage error, never a pass
@@ -22,7 +22,7 @@ const USAGE =
   '  frozen-eval verify <corpus.json> <manifest.json>\n' +
   '  frozen-eval check <corpus.json> [--allow-unchecked-near-duplicates]\n' +
   '                                  [--near-dup-threshold 0.8] [--max-violations 100]\n' +
-  '  frozen-eval verify-ledger <runs.jsonl>';
+  '  frozen-eval verify-ledger <runs.jsonl> [--manifest m.json] [--corpus c.json]';
 
 class UsageError extends Error {}
 
@@ -122,12 +122,25 @@ export function main(argv: string[]): number {
         } catch (err) {
           throw new UsageError(`cannot read ledger at ${path}: ${err}`);
         }
-        const verdict = verifyLedger(text);
+        const manifestPath = flagValue(rest, '--manifest');
+        const corpusPath = flagValue(rest, '--corpus');
+        if (corpusPath != null && manifestPath == null) {
+          throw new UsageError('--corpus checks ids as part of replay, which needs --manifest');
+        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const manifest = manifestPath != null ? (readJson(manifestPath, 'manifest') as any) : undefined;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const corpus = corpusPath != null ? (readJson(corpusPath, 'corpus') as any) : undefined;
+        const verdict = verifyLedger(text, { manifest, corpus });
         if (!verdict.intact) {
           console.error(`ledger broken at entry ${verdict.brokenAt}: ${verdict.reason}`);
           return 1;
         }
-        console.log(`ledger intact: ${verdict.entries} run(s), chained`);
+        console.log(
+          verdict.replayed
+            ? `ledger verified: ${verdict.entries} run(s), chained and replayed`
+            : `chain intact: ${verdict.entries} run(s) (not replayed; pass --manifest to verify results)`
+        );
         return 0;
       }
       case '--help':
