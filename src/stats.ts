@@ -37,13 +37,21 @@ export type ItemScores = Record<string, boolean | number>;
 export interface MetricAggregate {
   kind: 'rate' | 'mean';
   value: number;
+  /** items that actually produced this metric - the denominator behind value */
   n: number;
+  /** items the metric was expected on: the size of the thing being measured.
+   * n < expected means the judge skipped items, and a number over a
+   * denominator that shrank without saying so is not evidence. */
+  expected: number;
   wilson?: WilsonInterval;
 }
 
 export type Aggregate = Record<string, MetricAggregate>;
 
-export function aggregate(perItem: ItemScores[]): Aggregate {
+/** `expectedN` is how many items the run was supposed to score - normally
+ * the split's item count. It is recorded per metric so a bar can tell
+ * "0.95 over 20 items" apart from "0.95 over the 5 the judge did not drop". */
+export function aggregate(perItem: ItemScores[], expectedN: number = perItem.length): Aggregate {
   const out: Aggregate = {};
   const names = new Set(perItem.flatMap((s) => Object.keys(s)));
   for (const name of names) {
@@ -60,12 +68,19 @@ export function aggregate(perItem: ItemScores[]): Aggregate {
     }
     if (booleans.length > 0) {
       const k = booleans.filter(Boolean).length;
-      out[name] = { kind: 'rate', value: k / booleans.length, n: booleans.length, wilson: wilson(k, booleans.length) };
+      out[name] = {
+        kind: 'rate',
+        value: k / booleans.length,
+        n: booleans.length,
+        expected: expectedN,
+        wilson: wilson(k, booleans.length)
+      };
     } else {
       out[name] = {
         kind: 'mean',
         value: numbers.length > 0 ? numbers.reduce((a, b) => a + b, 0) / numbers.length : NaN,
-        n: numbers.length
+        n: numbers.length,
+        expected: expectedN
       };
     }
   }
@@ -77,6 +92,9 @@ export interface BarResult {
   value: number;
   /** the denominator behind the value; a number without one is not evidence */
   n: number;
+  /** how many items the metric was expected on; n < expected is a shortfall
+   * the bar refuses over unless it declared a lower minCoverage */
+  expected: number;
   bar: string;
   pass: boolean;
   detail?: string;
@@ -93,13 +111,53 @@ export function evaluateBars(agg: Aggregate, bars: Bar[]): Verdict {
     const bound = bar.bound ?? 'point';
     const barText = `${bar.op} ${bar.value}${bound === 'wilson-low' ? ' (wilson lower bound)' : ''}`;
     if (metric == null) {
-      return { metric: bar.metric, value: NaN, n: 0, bar: barText, pass: false, detail: 'metric never produced' };
+      return {
+        metric: bar.metric,
+        value: NaN,
+        n: 0,
+        expected: 0,
+        bar: barText,
+        pass: false,
+        detail: 'metric never produced'
+      };
+    }
+    // A metric the judge produced for only part of the split is the same
+    // failure as one it never produced, arrived at more quietly: the value
+    // describes the items that worked. Absence of 100% fails like absence.
+    const expected = metric.expected ?? metric.n;
+    const minCoverage = bar.minCoverage ?? 1;
+    if (!(Number.isFinite(minCoverage) && minCoverage > 0 && minCoverage <= 1)) {
+      return {
+        metric: bar.metric,
+        value: metric.value,
+        n: metric.n,
+        expected,
+        bar: barText,
+        pass: false,
+        detail: `bar declares minCoverage ${bar.minCoverage}; it must be in (0, 1]`
+      };
+    }
+    if (expected > 0 && metric.n / expected < minCoverage) {
+      return {
+        metric: bar.metric,
+        value: metric.value,
+        n: metric.n,
+        expected,
+        bar: barText,
+        pass: false,
+        detail:
+          `metric produced for ${metric.n} of ${expected} items` +
+          (bar.minCoverage === undefined
+            ? '; a bar over a partial split refuses unless it declares minCoverage'
+            : `, below the declared minCoverage of ${minCoverage}`)
+      };
     }
     if (bound === 'wilson-low' && metric.kind !== 'rate') {
       return {
         metric: bar.metric,
         value: metric.value,
         n: metric.n,
+        expected,
         bar: barText,
         pass: false,
         detail: 'wilson-low bound requires a boolean (rate) metric'
@@ -108,7 +166,7 @@ export function evaluateBars(agg: Aggregate, bars: Bar[]): Verdict {
     const value = bound === 'wilson-low' ? metric.wilson!.low : metric.value;
     const pass =
       Number.isFinite(value) && (bar.op === '>=' ? value >= bar.value : value <= bar.value);
-    return { metric: bar.metric, value, n: metric.n, bar: barText, pass };
+    return { metric: bar.metric, value, n: metric.n, expected, bar: barText, pass };
   });
   return { pass: results.every((r) => r.pass), results };
 }

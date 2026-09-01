@@ -22,6 +22,12 @@ export interface Bar {
    * the Wilson 95% lower bound, so a lucky small-n rate cannot clear a bar
    * its interval does not support. Rate metrics only. */
   bound?: 'point' | 'wilson-low';
+  /** the fraction of the split the metric must actually be produced for,
+   * in (0, 1]. Default 1: a judge that skipped items has not measured the
+   * split, and a bar over a partial denominator refuses rather than passes.
+   * Lowering it is a declaration, made at freeze time and inside the
+   * manifest hash like every other bar field. */
+  minCoverage?: number;
   note?: string;
 }
 
@@ -53,6 +59,14 @@ export function freeze(corpus: Corpus, bars: Bar[], opts: { holdout?: string[] }
   }
   if (bars.length === 0) {
     throw new FrozenEvalError('no bars declared; an eval with nothing to clear proves nothing');
+  }
+  for (const bar of bars) {
+    if (bar.minCoverage === undefined) continue;
+    if (!(Number.isFinite(bar.minCoverage) && bar.minCoverage > 0 && bar.minCoverage <= 1)) {
+      throw new FrozenEvalError(
+        `bar on "${bar.metric}" declares minCoverage ${bar.minCoverage}; it must be in (0, 1]`
+      );
+    }
   }
   const splits: Manifest['splits'] = {};
   for (const [name, items] of Object.entries(corpus)) {

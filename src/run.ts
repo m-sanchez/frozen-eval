@@ -59,7 +59,10 @@ export async function runEval(input: RunInput): Promise<EvalRun> {
   for (const item of items) {
     perItem.push({ id: item.id, scores: await judge(item) });
   }
-  const agg = aggregate(perItem.map((p) => p.scores));
+  const agg = aggregate(
+    perItem.map((p) => p.scores),
+    items.length
+  );
   return {
     identity: {
       label,

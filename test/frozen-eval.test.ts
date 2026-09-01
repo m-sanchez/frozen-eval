@@ -6,6 +6,7 @@ import { FrozenEvalError, freeze, verifyCorpus, verifyManifest } from '../src/ma
 import type { Corpus, Item } from '../src/manifest.ts';
 import { runEval } from '../src/run.ts';
 import { evaluateBars, wilson } from '../src/stats.ts';
+import type { ItemScores } from '../src/stats.ts';
 
 const item = (id: string, input: string, expected: unknown = null): Item => ({ id, input, expected });
 
@@ -204,4 +205,41 @@ test('wilson: the algebraic boundaries are exact, not float residue', () => {
     assert.equal(wilson(0, n).low, 0, `wilson(0, ${n}).low`);
     assert.equal(wilson(n, n).high, 1, `wilson(${n}, ${n}).high`);
   }
+});
+
+test('a metric measured on 5 of 20 items does not clear its bar', async () => {
+  const twenty: Corpus = { val: Array.from({ length: 20 }, (_, i) => item(`t${i}`, `question ${i}`)) };
+  const bars = [{ metric: 'exact', op: '>=' as const, value: 0.9 }];
+  const m = freeze(twenty, bars);
+  // the normal defensive judge: swallow the per-item failure, return nothing
+  let scored = 0;
+  const run = await runEval({
+    manifest: m,
+    corpus: twenty,
+    split: 'val',
+    judge: (): ItemScores => (scored++ < 5 ? { exact: true } : {}),
+    label: 'flaky-judge'
+  });
+  assert.ok(!run.verdict.pass, 'a bar measured on a quarter of the split must not pass');
+  assert.match(run.verdict.results[0].detail!, /5 of 20/);
+  assert.equal(run.aggregate.exact.n, 5);
+  assert.equal(run.aggregate.exact.expected, 20);
+  assert.equal(run.identity.itemCount, 20);
+});
+
+test('a bar may opt in to partial coverage, and the opt-in is in the manifest', async () => {
+  const twenty: Corpus = { val: Array.from({ length: 20 }, (_, i) => item(`t${i}`, `question ${i}`)) };
+  const bars = [{ metric: 'exact', op: '>=' as const, value: 0.9, minCoverage: 0.25 }];
+  const m = freeze(twenty, bars);
+  let scored = 0;
+  const run = await runEval({
+    manifest: m,
+    corpus: twenty,
+    split: 'val',
+    judge: (): ItemScores => (scored++ < 5 ? { exact: true } : {}),
+    label: 'declared-partial'
+  });
+  assert.ok(run.verdict.pass, 'the declared minCoverage is met');
+  // and the opt-in cannot be added after the fact
+  assert.ok(!verifyManifest({ ...m, bars: [{ ...bars[0], minCoverage: 0.1 }] }));
 });

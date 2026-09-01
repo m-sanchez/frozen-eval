@@ -29,7 +29,12 @@ exists to close:
   breaks the manifest hash, and `verifyManifest` says so to anyone.
 - **Runs are fail-closed.** A drifted split refuses to run. A split the
   manifest never froze refuses to run. A bar over a metric the run never
-  produced fails, never passes by absence.
+  produced fails, never passes by absence - and so does a bar over a metric
+  the judge produced for only part of the split. Every metric carries both
+  the denominator it was measured on and the one it was expected on, so
+  "0.95 over 20 items" and "0.95 over the 5 items the judge did not drop"
+  are not the same result. Partial coverage is passable only when the bar
+  declared it at freeze time (`minCoverage`), inside the manifest hash.
 - **The holdout answers regressions only.** Splits marked `holdout` at
   freeze time throw unless the run declares `regression: true`; the
   day-to-day loop cannot spend the split that exists to catch it.
@@ -153,6 +158,8 @@ Node 22.18+ (erasable-syntax TypeScript; node runs the sources directly).
 | an edited past run breaks the ledger at that entry | history defends itself, with a line number |
 | a deleted run breaks the chain too | absence is as loud as alteration |
 | a bar over a missing metric fails | nothing passes by not being measured |
+| a metric measured on 5 of 20 items does not clear its bar | 75% absence fails like total absence |
+| a bar may opt in to partial coverage, and the opt-in is in the manifest | the exception is declared, not assumed |
 | wilson(0, 0) is [0, 1] | total ignorance is never a confident point |
 | a lucky 6-of-7 clears the point bar and fails the wilson-low bar | intervals can gate, not just decorate |
 | a mixed boolean/number metric refuses to aggregate | n=1 by accident cannot clear anything |
