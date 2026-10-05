@@ -28,16 +28,22 @@
     "type": "git",
     "url": "git+https://github.com/m-sanchez/frozen-eval.git"
   },
+  "homepage": "https://github.com/m-sanchez/frozen-eval#readme",
+  "bugs": {
+    "url": "https://github.com/m-sanchez/frozen-eval/issues"
+  },
   "author": "Miguel Sanchez <contact@miguelsanchez.co.uk>",
   "license": "MIT",
   "keywords": [
     "evals",
     "llm",
     "benchmark",
+    "eval-harness",
     "reproducibility",
-    "leakage",
+    "data-leakage",
+    "contamination",
     "wilson-interval",
-    "typescript"
+    "hash-chain"
   ],
   "engines": {
     "node": ">=22.18"
